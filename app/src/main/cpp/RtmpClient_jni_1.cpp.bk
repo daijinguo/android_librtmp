@@ -165,3 +165,6 @@ Java_dai_android_media_live_rtmp_RtmpClient_getIpAddr(JNIEnv *env, jclass clazz,
 
     return env->NewStringUTF("");
 }
+
+extern "C"
+JNIEXPORT void JNICALL
