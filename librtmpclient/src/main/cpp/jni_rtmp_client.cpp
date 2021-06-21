@@ -271,7 +271,17 @@ static jint _pause(JNIEnv* env, jobject thiz, jlong handler, jboolean pause)
 
 static jboolean _isConnected(JNIEnv* env, jobject thiz, jlong handler)
 {
-    // TODO: implement nativeIsConnected()
+    RTMP* rtmp = (RTMP*)handler;
+    if (!rtmp)
+    {
+        LOGE("_isConnected: bad rtmp object handler");
+        return JNI_FALSE;
+    }
+    if (RTMP_IsConnected(rtmp) > 0)
+    {
+        return JNI_TRUE;
+    }
+    return JNI_FALSE;
 }
 
 static void _close(JNIEnv* env, jobject thiz, jlong handler)
