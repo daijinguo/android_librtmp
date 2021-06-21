@@ -135,7 +135,6 @@ static void initRtmpClientException(JNIEnv* env)
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT_STREAM);
 
-
     GET_STATIC_JAVA_VALUE(RTMP_SUCCESS);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_OPEN_ALLOC);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_OPEN_CONNECT_STREAM);
@@ -261,12 +260,39 @@ static jint _read(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jin
 static jint
 _write(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, jint size)
 {
-    // TODO: implement nativeWrite()
+    RTMP* rtmp = (RTMP*)handler;
+    if (!rtmp)
+    {
+        LOGE("_write: bad rtmp object handler");
+        throwIllegalStateException(env, "bad rtmp object handler");
+        return rtmpClientClass.exceptions.RTMP_ERROR_MEM_ALLOC;
+    }
+
+    int connected = RTMP_IsConnected(rtmp);
+    if (connected != TRUE)
+    {
+        LOGE("_write: rtmp not connected");
+        return rtmpClientClass.exceptions.RTMP_ERROR_URL_CONNECT;
+    }
+
+    jbyte* buffer = new jbyte[size];
+    env->GetByteArrayRegion(data, offset, size, buffer);
+    int result = RTMP_Write(rtmp, (const char*)buffer, size);
+    delete[] buffer;
+    return result;
 }
 
 static jint _pause(JNIEnv* env, jobject thiz, jlong handler, jboolean pause)
 {
-    // TODO: implement nativePause()
+    RTMP* rtmp = (RTMP*)handler;
+    if (!rtmp)
+    {
+        LOGE("_pause: bad rtmp object handler");
+        throwIllegalStateException(env, "bad rtmp object handler");
+        return rtmpClientClass.exceptions.RTMP_ERROR_MEM_ALLOC;
+    }
+
+    return RTMP_Pause(rtmp, pause);
 }
 
 static jboolean _isConnected(JNIEnv* env, jobject thiz, jlong handler)
@@ -286,17 +312,23 @@ static jboolean _isConnected(JNIEnv* env, jobject thiz, jlong handler)
 
 static void _close(JNIEnv* env, jobject thiz, jlong handler)
 {
-    // TODO: implement nativeClose()
+    RTMP* rtmp = (RTMP*)handler;
+    if (rtmp)
+    {
+        LOGI("_close: close and free rtmp: %p", rtmp);
+        RTMP_Close(rtmp);
+        RTMP_Free(rtmp);
+    }
 }
 
 static JNINativeMethod g_methods[] = {
-    { "nativeInit", "()J", (void*)_init },
-    { "nativeOpen", "(JLjava/lang/String;ZI)I", (void*)_open },
-    { "nativeRead", "(J[BII)I", (void*)_read },
-    { "nativeWrite", "(J[BII)I", (void*)_write },
-    { "nativePause", "(JZ)I", (void*)_pause },
-    { "nativeIsConnected", "(J)Z", (void*)_isConnected },
-    { "nativeClose", "(J)V", (void*)_close },
+        { "nativeInit",        "()J",                      (void*)_init },
+        { "nativeOpen",        "(JLjava/lang/String;ZI)I", (void*)_open },
+        { "nativeRead",        "(J[BII)I",                 (void*)_read },
+        { "nativeWrite",       "(J[BII)I",                 (void*)_write },
+        { "nativePause",       "(JZ)I",                    (void*)_pause },
+        { "nativeIsConnected", "(J)Z",                     (void*)_isConnected },
+        { "nativeClose",       "(J)V",                     (void*)_close },
 };
 
 void rtmp_client_OnLoad(JNIEnv* env)
