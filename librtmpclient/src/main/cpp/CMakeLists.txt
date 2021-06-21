@@ -7,6 +7,7 @@ add_subdirectory(librtmp)
 
 add_library(
         ${PROJECT_NAME} SHARED
+        android_main.cpp
         jni_rtmp_client.cpp
 )
 

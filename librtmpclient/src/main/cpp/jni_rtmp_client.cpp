@@ -1,21 +1,26 @@
 #include <jni.h>
-#include <android/log.h>
 
 #include "librtmp/rtmp.h"
-
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "jni_rtmp", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "jni_rtmp", __VA_ARGS__)
+#include "logger.hpp"
+#include "jvm_loader.hpp"
 
 // https://github.com/ant-media/LibRtmp-Client-for-Android.git
 
 namespace
 {
-    JavaVM* gvm = nullptr;
-
     const char* const rtmp_client_java_class = "dai/android/media/client/rtmp/RtmpClient";
 
     struct RtmpClientException
     {
+        jint RTMP_TRUE;
+        jint RTMP_FALSE;
+
+        jint RTMP_ERROR_MEM_ALLOC;
+
+        jint RTMP_ERROR_URL_INIT;
+        jint RTMP_ERROR_URL_CONNECT;
+        jint RTMP_ERROR_URL_CONNECT_STREAM;
+
         jint RTMP_SUCCESS;
         jint RTMP_ERROR_OPEN_ALLOC;
         jint RTMP_ERROR_OPEN_CONNECT_STREAM;
@@ -53,6 +58,7 @@ namespace
 
         RtmpClientException exceptions;
     };
+
     RtmpClientClass rtmpClientClass;
 } // namespace
 
@@ -97,7 +103,7 @@ FAILED:
     return _global;
 }
 
-static jint throwIllegalStateException(JNIEnv* env, char* message)
+static jint throwIllegalStateException(JNIEnv* env, const char* message)
 {
     jclass exception = env->FindClass("java/lang/IllegalStateException");
     return env->ThrowNew(exception, message);
@@ -117,10 +123,18 @@ static void initRtmpClientException(JNIEnv* env)
     do {                                                                                          \
         jfieldID field =       env->GetStaticFieldID ((jclass)rtmpClientClass.clazz, #name, "I"); \
         jint     value = (jint)env->GetStaticIntField((jclass)rtmpClientClass.clazz, field);      \
-        LOGI("value: %-5d <--> key: %s", value, #name);                                               \
+        LOGI("value: %-5d <--> key: %s", value, #name);                                           \
         size_t off = offsetof(struct RtmpClientException, name);                                  \
         *(jint*)( (char*)(&rtmpClientClass.exceptions) + off ) = value;                           \
     } while(0)
+
+    GET_STATIC_JAVA_VALUE(RTMP_TRUE);
+    GET_STATIC_JAVA_VALUE(RTMP_FALSE);
+    GET_STATIC_JAVA_VALUE(RTMP_ERROR_MEM_ALLOC);
+    GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_INIT);
+    GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT);
+    GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT_STREAM);
+
 
     GET_STATIC_JAVA_VALUE(RTMP_SUCCESS);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_OPEN_ALLOC);
@@ -154,6 +168,11 @@ static void initRtmpClientException(JNIEnv* env)
 static jlong _init(JNIEnv* env, jobject thiz)
 {
     RTMP* rtmp = RTMP_Alloc();
+    if (!rtmp)
+    {
+        throwIllegalStateException(env, "allocate rtmp failed");
+    }
+
     LOGI("rtmp address=%p", rtmp);
     return (jlong)rtmp;
 }
@@ -164,21 +183,23 @@ _open(JNIEnv* env, jobject thiz, jlong handler, jstring url, jboolean publish, j
     RTMP* rtmp = (RTMP*)handler;
     if (!rtmp)
     {
+        LOGE("_open: bad rtmp object handler");
         throwIllegalStateException(env, "bad rtmp object handler");
-        return rtmpClientClass.exceptions.RTMP_ERROR_IGNORED;
+        return rtmpClientClass.exceptions.RTMP_ERROR_MEM_ALLOC;
     }
 
     const char* cUrl = env->GetStringUTFChars(url, nullptr);
-    int result = rtmpClientClass.exceptions.RTMP_SUCCESS;
+    int result = rtmpClientClass.exceptions.RTMP_TRUE;
 
     RTMP_Init(rtmp);
     rtmp->Link.timeout = timeout;
     result = RTMP_SetupURL(rtmp, (char*)cUrl);
     if (result != TRUE)
     {
-        LOGE("set rtmp url failed");
+        LOGE("_open: setup rtmp url failed, reason=%d", result);
         RTMP_Free(rtmp);
-        result = rtmpClientClass.exceptions.RTMP_ERROR_MEM_ALLOC_FAIL;
+        result = rtmpClientClass.exceptions.RTMP_ERROR_URL_INIT;
+        goto FAILED;
     }
 
     if (publish)
@@ -189,18 +210,18 @@ _open(JNIEnv* env, jobject thiz, jlong handler, jstring url, jboolean publish, j
     result = RTMP_Connect(rtmp, nullptr);
     if (result != TRUE)
     {
-        LOGE("RTMP_Connect: failed, reason=%d", result);
+        LOGE("_open: rtmp connect failed, reason=%d", result);
         RTMP_Free(rtmp);
-        result = rtmpClientClass.exceptions.RTMP_ERROR_CONNECT_FAIL;
+        result = rtmpClientClass.exceptions.RTMP_ERROR_URL_CONNECT;
         goto FAILED;
     }
 
     result = RTMP_ConnectStream(rtmp, 0);
-    if (result != TRUE)
+    if (result <= 0)
     {
-        LOGE("RTMP_ConnectStream: failed, reason=%d", result);
+        LOGE("_open: rtmp connect stream failed, reason=%d", result);
         RTMP_Free(rtmp);
-        result = rtmpClientClass.exceptions.RTMP_ERROR_CONNECT_FAIL;
+        result = rtmpClientClass.exceptions.RTMP_ERROR_URL_CONNECT_STREAM;
         goto FAILED;
     }
 
@@ -211,7 +232,30 @@ FAILED:
 
 static jint _read(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, jint size)
 {
-    // TODO: implement nativeRead()
+    RTMP* rtmp = (RTMP*)handler;
+    if (!rtmp)
+    {
+        LOGE("_read: bad rtmp object handler");
+        throwIllegalStateException(env, "bad rtmp object handler");
+        return rtmpClientClass.exceptions.RTMP_ERROR_MEM_ALLOC;
+    }
+
+    int connected = RTMP_IsConnected(rtmp);
+    if (connected != TRUE)
+    {
+        LOGE("_read: rtmp not connected");
+        return rtmpClientClass.exceptions.RTMP_ERROR_URL_CONNECT;
+    }
+
+    char* c_data = new char[size];
+    int iRead = RTMP_Read(rtmp, c_data, size);
+    if (iRead > 0)
+    {
+        env->SetByteArrayRegion(data, offset, iRead, (const jbyte*)c_data);
+    }
+
+    delete[] c_data;
+    return iRead;
 }
 
 static jint
@@ -236,42 +280,25 @@ static void _close(JNIEnv* env, jobject thiz, jlong handler)
 }
 
 static JNINativeMethod g_methods[] = {
-        { "nativeInit",        "()J",                      (void*)_init },
-        { "nativeOpen",        "(JLjava/lang/String;ZI)I", (void*)_open },
-        { "nativeRead",        "(J[BII)I",                 (void*)_read },
-        { "nativeWrite",       "(J[BII)I",                 (void*)_write },
-        { "nativePause",       "(JZ)I",                    (void*)_pause },
-        { "nativeIsConnected", "(J)Z",                     (void*)_isConnected },
-        { "nativeClose",       "(J)V",                     (void*)_close },
+    { "nativeInit", "()J", (void*)_init },
+    { "nativeOpen", "(JLjava/lang/String;ZI)I", (void*)_open },
+    { "nativeRead", "(J[BII)I", (void*)_read },
+    { "nativeWrite", "(J[BII)I", (void*)_write },
+    { "nativePause", "(JZ)I", (void*)_pause },
+    { "nativeIsConnected", "(J)Z", (void*)_isConnected },
+    { "nativeClose", "(J)V", (void*)_close },
 };
 
-jint JNI_OnLoad(JavaVM* jvm, void* reserved)
+void rtmp_client_OnLoad(JNIEnv* env)
 {
-    gvm = jvm;
-
-    JNIEnv* env = nullptr;
-    if (jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK)
-    {
-        LOGE("JNI_OnLoad: get 'JNIEnv' failed");
-        return JNI_FALSE;
-    }
-
     initRtmpClientException(env);
 
     const auto N = sizeof(g_methods) / sizeof(g_methods[0]);
     env->RegisterNatives((jclass)rtmpClientClass.clazz, g_methods, N);
-
-    return JNI_VERSION_1_6;
 }
 
-void JNI_OnUnload(JavaVM* jvm, void* reserved)
+void rtmp_client_OnUnload(JNIEnv* env)
 {
-    JNIEnv* env = nullptr;
-    if (jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK)
-    {
-        LOGE("JNI_OnUnload: get 'JNIEnv' failed");
-        return;
-    }
     env->UnregisterNatives((jclass)rtmpClientClass.clazz);
 }
 

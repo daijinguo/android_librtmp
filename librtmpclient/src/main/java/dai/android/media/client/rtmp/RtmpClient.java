@@ -19,6 +19,20 @@ public class RtmpClient {
 
     // exception const value
 
+    public static final int RTMP_TRUE = 1;
+    public static final int RTMP_FALSE = 0;
+
+    // rtmp memory allocate failed
+    public static final int RTMP_ERROR_MEM_ALLOC = -100;
+
+    // rtmp url init failed
+    public static final int RTMP_ERROR_URL_INIT = -200;
+    // rtmp url connect failed
+    public static final int RTMP_ERROR_URL_CONNECT = -201;
+    // rtmp url connect stream failed
+    public static final int RTMP_ERROR_URL_CONNECT_STREAM = -202;
+
+
     /**
      * RTMP client could not allocate memory for rtmp context structure
      */
@@ -188,13 +202,15 @@ public class RtmpClient {
         Log.i(TAG, "native rtmp address: 0x" + Long.toHexString(nativeHandler));
 
         if (nativeHandler <= 0) {
-            throw new RtmpIOException(RTMP_ERROR_OPEN_ALLOC);
+            throw new RtmpIOException(RTMP_ERROR_MEM_ALLOC);
         }
 
         int result = nativeOpen(nativeHandler, url, publishMode, _timeoutInSecond);
-        if (result != RTMP_SUCCESS) {
+        if (result != RTMP_TRUE) {
             throw new RtmpIOException(result);
         }
+
+        Log.i(TAG, "open rtmp success");
     }
 
     public boolean isConnected() {
