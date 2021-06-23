@@ -2,5 +2,9 @@
 
 #include <android/log.h>
 
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "jni_rtmp", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "jni_rtmp", __VA_ARGS__)
+#ifndef RTMP_TAG
+#define RTMP_TAG "jni_rtmp"
+#endif
+
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  RTMP_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, RTMP_TAG, __VA_ARGS__)
