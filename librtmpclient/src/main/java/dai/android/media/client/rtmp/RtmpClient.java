@@ -23,145 +23,14 @@ public class RtmpClient {
     public static final int RTMP_FALSE = 0;
 
     // rtmp memory allocate failed
-    public static final int RTMP_ERROR_MEM_ALLOC = -100;
+    public static final int RTMP_ERROR_OBJECT_NOT_ALLOC = -100;
 
     // rtmp url init failed
-    public static final int RTMP_ERROR_URL_INIT = -200;
+    public static final int RTMP_ERROR_URL_SETUP = -200;
     // rtmp url connect failed
     public static final int RTMP_ERROR_URL_CONNECT = -201;
     // rtmp url connect stream failed
     public static final int RTMP_ERROR_URL_CONNECT_STREAM = -202;
-
-
-    /**
-     * RTMP client could not allocate memory for rtmp context structure
-     */
-    public static final int RTMP_ERROR_OPEN_ALLOC = -2;
-
-    /**
-     * RTMP client could not open the stream on server
-     */
-    public static final int RTMP_ERROR_OPEN_CONNECT_STREAM = -3;
-
-    /**
-     * Received an unknown option from the RTMP server
-     */
-    public final static int RTMP_ERROR_UNKNOWN_RTMP_OPTION = -4;
-
-    /**
-     * RTMP server sent a packet with unknown AMF type
-     */
-    public final static int RTMP_ERROR_UNKNOWN_RTMP_AMF_TYPE = -5;
-
-    /**
-     * DNS server is not reachable
-     */
-    public final static int RTMP_ERROR_DNS_NOT_REACHABLE = -6;
-
-    /**
-     * Could not establish a socket connection to the server
-     */
-    public final static int RTMP_ERROR_SOCKET_CONNECT_FAIL = -7;
-
-    /**
-     * SOCKS negotiation failed
-     */
-    public final static int RTMP_ERROR_SOCKS_NEGOTIATION_FAIL = -8;
-
-    /**
-     * Could not create a socket to connect to RTMP server
-     */
-    public final static int RTMP_ERROR_SOCKET_CREATE_FAIL = -9;
-
-    /**
-     * SSL connection requested but not supported by the client
-     */
-    public final static int RTMP_ERROR_NO_SSL_TLS_SUPP = -10;
-
-    /**
-     * Could not connect to the server for handshake
-     */
-    public final static int RTMP_ERROR_HANDSHAKE_CONNECT_FAIL = -11;
-
-    /**
-     * Handshake with the server failed
-     */
-    public final static int RTMP_ERROR_HANDSHAKE_FAIL = -12;
-
-    /**
-     * RTMP server connection failed
-     */
-    public final static int RTMP_ERROR_CONNECT_FAIL = -13;
-
-    /**
-     * Connection to the server lost
-     */
-    public final static int RTMP_ERROR_CONNECTION_LOST = -14;
-
-    /**
-     * Received an unexpected timestamp from the server
-     */
-    public final static int RTMP_ERROR_KEYFRAME_TS_MISMATCH = -15;
-
-    /**
-     * The RTMP stream received is corrupted
-     */
-    public final static int RTMP_ERROR_READ_CORRUPT_STREAM = -16;
-
-    /**
-     * Memory allocation failed
-     */
-    public final static int RTMP_ERROR_MEM_ALLOC_FAIL = -17;
-
-    /**
-     * Stream indicated a bad datasize, could be corrupted
-     */
-    public final static int RTMP_ERROR_STREAM_BAD_DATASIZE = -18;
-
-    /**
-     * RTMP packet received is too small
-     */
-    public final static int RTMP_ERROR_PACKET_TOO_SMALL = -19;
-
-    /**
-     * Could not send packet to RTMP server
-     */
-    public final static int RTMP_ERROR_SEND_PACKET_FAIL = -20;
-
-    /**
-     * AMF Encode failed while preparing a packet
-     */
-    public final static int RTMP_ERROR_AMF_ENCODE_FAIL = -21;
-
-    /**
-     * Missing a :// in the URL
-     */
-    public final static int RTMP_ERROR_URL_MISSING_PROTOCOL = -22;
-
-    /**
-     * Hostname is missing in the URL
-     */
-    public final static int RTMP_ERROR_URL_MISSING_HOSTNAME = -23;
-
-    /**
-     * The port number indicated in the URL is wrong
-     */
-    public final static int RTMP_ERROR_URL_INCORRECT_PORT = -24;
-
-    /**
-     * Error code used by JNI to return after throwing an exception
-     */
-    public final static int RTMP_ERROR_IGNORED = -25;
-
-    /**
-     * RTMP client has encountered an unexpected error
-     */
-    public final static int RTMP_ERROR_GENERIC_ERROR = -26;
-
-    /**
-     * A sanity check failed in the RTMP client
-     */
-    public final static int RTMP_ERROR_SANITY_FAIL = -27;
 
 
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -202,7 +71,7 @@ public class RtmpClient {
         Log.i(TAG, "native rtmp address: 0x" + Long.toHexString(nativeHandler));
 
         if (nativeHandler <= 0) {
-            throw new RtmpIOException(RTMP_ERROR_MEM_ALLOC);
+            throw new RtmpIOException(RTMP_ERROR_OBJECT_NOT_ALLOC);
         }
 
         int result = nativeOpen(nativeHandler, url, publishMode, _timeoutInSecond);
@@ -237,6 +106,14 @@ public class RtmpClient {
         return write(data, 0, data.length);
     }
 
+    public int writeHeader(int vWidth, int vHeight) throws RtmpIOException, IllegalStateException {
+        return nativeWriteHeader(nativeHandler, vWidth, vHeight);
+    }
+
+    public int writeAudio(byte[] data, int offset, int length, long timestamp) throws RtmpIOException, IllegalStateException {
+        return nativeWriteAudio(nativeHandler, data, offset, length, timestamp);
+    }
+
     public boolean pause(boolean pause) throws RtmpIOException, IllegalStateException {
         int result = nativePause(nativeHandler, pause);
         if (result != RTMP_SUCCESS) {
@@ -258,6 +135,10 @@ public class RtmpClient {
     private native int nativeRead(long handler, byte[] data, int offset, int size) throws IllegalStateException;
 
     private native int nativeWrite(long handler, byte[] data, int offset, int size) throws IllegalStateException;
+
+    private native int nativeWriteHeader(long handler, int videoWidth, int videoHeight) throws IllegalStateException;
+
+    private native int nativeWriteAudio(long handler, byte[] data, int offset, int length, long timestamp) throws IllegalStateException;
 
     private native int nativePause(long handler, boolean pause) throws IllegalStateException;
 
