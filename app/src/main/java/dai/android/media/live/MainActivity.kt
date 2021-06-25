@@ -7,6 +7,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import dai.android.media.client.rtmp.PublishConfig
 import dai.android.media.client.rtmp.RtmpClient
 
 class MainActivity : AppCompatActivity() {
@@ -38,12 +39,14 @@ class MainActivity : AppCompatActivity() {
         override fun surfaceCreated(holder: SurfaceHolder) {
             Log.i(TAG, "surfaceCreated")
 
-            rtmpClient.open(rtmpClientUrl, true)
+            rtmpClient.open(rtmpClientUrl)
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             Log.i(TAG, "surfaceChanged: fmt=$format width=$width height=$height")
-            rtmpClient.writeHeader(width, height)
+
+            val config = PublishConfig.Build().video(width, height).builder()
+            rtmpClient.publish(rtmpClientUrl, config)
         }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {

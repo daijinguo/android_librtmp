@@ -14,7 +14,7 @@ public class RtmpClient {
 
 
     public static final int RTMP_SUCCESS = 0; // rtmp success
-    public final static int RTMP_READ_DONE = -1; // RTMP read has received an EOF or READ_COMPLETE from the server
+    public final static int RTMP_READ_DONE = -1; // RTMP readRaw has received an EOF or READ_COMPLETE from the server
 
 
     // exception const value
@@ -31,6 +31,8 @@ public class RtmpClient {
     public static final int RTMP_ERROR_URL_CONNECT = -201;
     // rtmp url connect stream failed
     public static final int RTMP_ERROR_URL_CONNECT_STREAM = -202;
+    // rtmp not connected
+    public static final int RTMP_NOT_CONNECTED = -203;
 
 
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -62,19 +64,39 @@ public class RtmpClient {
         }
     }
 
-    public void open(String url, boolean publishMode) throws RtmpIOException {
+    public void publish(String url, PublishConfig config) throws RtmpIOException {
         if (nativeHandler > 0) {
             close();
         }
 
         nativeHandler = nativeInit();
-        Log.i(TAG, "native rtmp address: 0x" + Long.toHexString(nativeHandler));
+        Log.i(TAG, "publish: native rtmp address: 0x" + Long.toHexString(nativeHandler));
 
         if (nativeHandler <= 0) {
             throw new RtmpIOException(RTMP_ERROR_OBJECT_NOT_ALLOC);
         }
 
-        int result = nativeOpen(nativeHandler, url, publishMode, _timeoutInSecond);
+        int result = nativeOpen(nativeHandler, url, true, _timeoutInSecond, config);
+        if (result != RTMP_TRUE) {
+            throw new RtmpIOException(result);
+        }
+
+        Log.i(TAG, "publish rtmp success");
+    }
+
+    public void open(String url) throws RtmpIOException {
+        if (nativeHandler > 0) {
+            close();
+        }
+
+        nativeHandler = nativeInit();
+        Log.i(TAG, "open: native rtmp address: 0x" + Long.toHexString(nativeHandler));
+
+        if (nativeHandler <= 0) {
+            throw new RtmpIOException(RTMP_ERROR_OBJECT_NOT_ALLOC);
+        }
+
+        int result = nativeOpen(nativeHandler, url, false, _timeoutInSecond, null);
         if (result != RTMP_TRUE) {
             throw new RtmpIOException(result);
         }
@@ -86,7 +108,7 @@ public class RtmpClient {
         return nativeIsConnected(nativeHandler);
     }
 
-    public int read(byte[] data, int offset, int size) throws RtmpIOException, IllegalStateException {
+    public int readRaw(byte[] data, int offset, int size) throws RtmpIOException, IllegalStateException {
         int result = nativeRead(nativeHandler, data, offset, size);
         if (result < RTMP_SUCCESS && result != RTMP_READ_DONE) {
             throw new RtmpIOException(result);
@@ -94,7 +116,7 @@ public class RtmpClient {
         return result;
     }
 
-    public int write(byte[] data, int offset, int size) throws RtmpIOException, IllegalStateException {
+    public int writeRaw(byte[] data, int offset, int size) throws RtmpIOException, IllegalStateException {
         int result = nativeWrite(nativeHandler, data, offset, size);
         if (result < RTMP_SUCCESS) {
             throw new RtmpIOException(result);
@@ -102,12 +124,8 @@ public class RtmpClient {
         return result;
     }
 
-    public int write(byte[] data) throws RtmpIOException, IllegalStateException {
-        return write(data, 0, data.length);
-    }
-
-    public int writeHeader(int vWidth, int vHeight) throws RtmpIOException, IllegalStateException {
-        return nativeWriteHeader(nativeHandler, vWidth, vHeight);
+    public int writeRaw(byte[] data) throws RtmpIOException, IllegalStateException {
+        return writeRaw(data, 0, data.length);
     }
 
     public int writeAudio(byte[] data, int offset, int length, long timestamp) throws RtmpIOException, IllegalStateException {
@@ -130,13 +148,11 @@ public class RtmpClient {
 
     private native long nativeInit();
 
-    private native int nativeOpen(long handler, String url, boolean publish, int timeout);
+    private native int nativeOpen(long handler, String url, boolean publish, int timeout, PublishConfig config);
 
     private native int nativeRead(long handler, byte[] data, int offset, int size) throws IllegalStateException;
 
     private native int nativeWrite(long handler, byte[] data, int offset, int size) throws IllegalStateException;
-
-    private native int nativeWriteHeader(long handler, int videoWidth, int videoHeight) throws IllegalStateException;
 
     private native int nativeWriteAudio(long handler, byte[] data, int offset, int length, long timestamp) throws IllegalStateException;
 

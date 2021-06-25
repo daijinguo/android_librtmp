@@ -19,29 +19,6 @@ namespace
 
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#define AVC_DEFINE(str) const AVal AV_##str = AVC(#str)
-    AVC_DEFINE(onMetaData);
-    AVC_DEFINE(duration);
-    AVC_DEFINE(width);
-    AVC_DEFINE(height);
-    AVC_DEFINE(videocodecid);
-    AVC_DEFINE(avcprofile);
-    AVC_DEFINE(avclevel);
-    AVC_DEFINE(videoframerate);
-    AVC_DEFINE(audiocodecid);
-    AVC_DEFINE(audiosamplerate);
-    AVC_DEFINE(audiochannels);
-    AVC_DEFINE(avc1);
-    AVC_DEFINE(mp4a);
-    AVC_DEFINE(onPrivateData);
-    AVC_DEFINE(record);
-
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    const int AAC_ADTS_HEADER_SIZE = 7;
-    const int FLV_TAG_HEAD_LEN = 11;
-    const int FLV_PRE_TAG_LEN = 4;
-
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     bool videoConfig = false;
     bool audioConfig = false;
 
@@ -122,20 +99,17 @@ static void initRtmpClientException(JNIEnv* env)
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_SETUP);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT);
     GET_STATIC_JAVA_VALUE(RTMP_ERROR_URL_CONNECT_STREAM);
+    GET_STATIC_JAVA_VALUE(RTMP_NOT_CONNECTED);
+
 }
 
 static jlong _init(JNIEnv* env, jobject thiz)
 {
-    RTMP* rtmp = RTMP_Alloc();
-    if (!rtmp)
-    {
-        throwIllegalStateException(env, "allocate rtmp failed");
-    }
-
     auto* client = new CRtmpClient;
-    if (!client)
+    if (client == nullptr)
     {
         throwIllegalStateException(env, "_init: new CRtmpClient failed");
+        return exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC;
     }
 
     LOGI("_init: CRtmpClient=%p", client);
@@ -143,9 +117,9 @@ static jlong _init(JNIEnv* env, jobject thiz)
 }
 
 #define RTMP_CLIENT_CHECK(client, handler)                               \
-    auto * client = (CRtmpClient*)(handler);                             \
+    auto *(client) = (CRtmpClient*)(handler);                            \
     do{                                                                  \
-        if (client == nullptr) {                                         \
+        if ((client) == nullptr) {                                       \
             LOGE("%s: CRtmpClient not allocate.", __FUNCTION__);         \
             throwIllegalStateException(env, "CRtmpClient not allocate"); \
             return;                                                      \
@@ -153,17 +127,19 @@ static jlong _init(JNIEnv* env, jobject thiz)
     } while(0)
 
 #define RTMP_CLIENT_CHECK_RETURN(client, handler, value)                \
-    auto *client = (CRtmpClient*)(handler);                             \
+    auto *(client) = (CRtmpClient*)(handler);                           \
     do {                                                                \
-        if(nullptr == client) {                                         \
+        if(nullptr == (client)) {                                       \
            LOGE("%s: CRtmpClient not allocate.", __FUNCTION__);         \
            throwIllegalStateException(env, "CRtmpClient not allocate"); \
            return (value);                                              \
-        }\
+        }                                                               \
     } while(0)
 
 static jint
-_open(JNIEnv* env, jobject thiz, jlong handler, jstring url, jboolean publish, jint timeout)
+_open(JNIEnv* env, jobject thiz, jlong handler,
+        jstring url, jboolean publish, jint timeout,
+        jobject config)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
@@ -177,9 +153,19 @@ static jint _read(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jin
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
-    jbyte* cdata = env->GetByteArrayElements(data, nullptr);
-    int result = rtmpClient->read(reinterpret_cast<uint8_t*>(&cdata[offset]), size);
-    env->ReleaseByteArrayElements(data, cdata, JNI_ABORT);
+    if (!rtmpClient->isConnected())
+    {
+        LOGI("%s:%d rtmp not connected", __FUNCTION__, __LINE__);
+        return exceptions.RTMP_NOT_CONNECTED;
+    }
+
+    char* buffer = new char[size];
+    int result = rtmpClient->readRaw(reinterpret_cast<uint8_t*>(buffer), size);
+    if (result > 0)
+    {
+        env->SetByteArrayRegion(data, offset, result, reinterpret_cast<const jbyte*>(buffer));
+    }
+    delete[] buffer;
     return result;
 }
 
@@ -188,125 +174,40 @@ _write(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, j
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
-    RTMP* rtmp = (RTMP*)handler;
-    if (!rtmp)
+    if (!rtmpClient->isConnected())
     {
-        LOGE("_write: bad rtmp object handler");
-        throwIllegalStateException(env, "bad rtmp object handler");
-        return exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC;
+        LOGI("%s:%d rtmp not connected", __FUNCTION__, __LINE__);
+        return exceptions.RTMP_NOT_CONNECTED;
     }
 
-    int connected = RTMP_IsConnected(rtmp);
-    if (connected != TRUE)
-    {
-        LOGE("_write: rtmp not connected");
-        return exceptions.RTMP_ERROR_URL_CONNECT;
-    }
-
-    jbyte* buffer = new jbyte[size];
-    env->GetByteArrayRegion(data, offset, size, buffer);
-    int result = RTMP_Write(rtmp, (const char*)buffer, size);
+    char* buffer = new char[size];
+    env->GetByteArrayRegion(data, offset, size, reinterpret_cast<jbyte*>(buffer));
+    int result = rtmpClient->writeRaw(reinterpret_cast<uint8_t*>(buffer), size);
     delete[] buffer;
     return result;
 }
 
 static jint _pause(JNIEnv* env, jobject thiz, jlong handler, jboolean pause)
 {
-    RTMP* rtmp = (RTMP*)handler;
-    if (!rtmp)
-    {
-        LOGE("_pause: bad rtmp object handler");
-        throwIllegalStateException(env, "bad rtmp object handler");
-        return exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC;
-    }
-
-    return RTMP_Pause(rtmp, pause);
+    RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
+    return rtmpClient->pause(pause);
 }
 
 static jboolean _isConnected(JNIEnv* env, jobject thiz, jlong handler)
 {
-    RTMP* rtmp = (RTMP*)handler;
-    if (!rtmp)
-    {
-        LOGE("_isConnected: bad rtmp object handler");
-        return JNI_FALSE;
-    }
-    if (RTMP_IsConnected(rtmp) > 0)
-    {
-        return JNI_TRUE;
-    }
-    return JNI_FALSE;
+    RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, JNI_FALSE);
+    return rtmpClient->isConnected();
 }
 
 static void _close(JNIEnv* env, jobject thiz, jlong handler)
 {
-    RTMP* rtmp = (RTMP*)handler;
-    if (rtmp)
-    {
-        LOGI("_close: close and free rtmp: %p", rtmp);
-        RTMP_Close(rtmp);
-        RTMP_Free(rtmp);
-    }
+    RTMP_CLIENT_CHECK(rtmpClient, handler);
+    delete rtmpClient;
 }
 
-static jint _writeHeader(JNIEnv* env, jobject thiz,
-        jlong handler, jint video_width, jint video_height)
-{
-    RTMP* rtmp = (RTMP*)handler;
-    if (!rtmp)
-    {
-        LOGE("_writeHeader: bad rtmp object handler");
-        throwIllegalStateException(env, "bad rtmp object handler");
-        return exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC;
-    }
 
-    if (!RTMP_IsConnected(rtmp))
-    {
-        LOGE("_writeHeader: rtmp not connected");
-        return exceptions.RTMP_ERROR_URL_CONNECT_STREAM;
-    }
-
-    videoConfig = false;
-    audioConfig = false;
-
-    uint32_t offset = 0;
-    char buffer[512] = { 0x00 };
-    char sendBuffer[512] = { 0x00 };
-    char* output = buffer;
-    char* output1 = buffer + sizeof(buffer);
-
-    output = AMF_EncodeString(output, output1, &AV_onMetaData);
-    *output++ = AMF_ECMA_ARRAY;
-
-    output = AMF_EncodeInt32(output, output1, 5);
-    output = AMF_EncodeNamedNumber(output, output1, &AV_width, video_width);
-    output = AMF_EncodeNamedNumber(output, output1, &AV_height, video_height);
-    output = AMF_EncodeNamedNumber(output, output1, &AV_duration, 0.0);
-    output = AMF_EncodeNamedNumber(output, output1, &AV_videocodecid, 7);
-    output = AMF_EncodeNamedNumber(output, output1, &AV_audiocodecid, 10);
-    output = AMF_EncodeInt24(output, output1, AMF_OBJECT_END);
-
-    size_t bodyLength = output - buffer;
-    size_t outputLength = bodyLength + FLV_TAG_HEAD_LEN + FLV_PRE_TAG_LEN;
-
-    sendBuffer[offset++] = 0x12;                        //tag type script
-    sendBuffer[offset++] = (uint8_t)(bodyLength >> 16); //data length
-    sendBuffer[offset++] = (uint8_t)(bodyLength >> 8);  //data length
-    sendBuffer[offset++] = (uint8_t)bodyLength;         //data length
-    sendBuffer[offset++] = 0;                           //time stamp
-    sendBuffer[offset++] = 0;                           //time stamp
-    sendBuffer[offset++] = 0;                           //time stamp
-    sendBuffer[offset++] = 0;                           //time stamp
-    sendBuffer[offset++] = 0x00;                        //stream id 0
-    sendBuffer[offset++] = 0x00;                        //stream id 0
-    sendBuffer[offset++] = 0x00;                        //stream id 0
-
-    memcpy(sendBuffer + offset, buffer, bodyLength);
-    return RTMP_Write(rtmp, sendBuffer, outputLength);
-}
-
-static jint _writeAudio(JNIEnv* env, jobject thiz,
-        jlong handler, jbyteArray data, jint offset, jint length, jlong timestamp)
+static jint _writeAudio(JNIEnv* env, jobject thiz, jlong handler,
+        jbyteArray data, jint offset, jint length, jlong timestamp)
 {
     RTMP* rtmp = (RTMP*)handler;
     if (!rtmp)
@@ -328,7 +229,7 @@ static jint _writeAudio(JNIEnv* env, jobject thiz,
     if (audioConfig == false)
     {
         bodyLength = 2 + 2; // AudioTagHeader + AudioSpecificConfig
-        outputLength = bodyLength + FLV_TAG_HEAD_LEN + FLV_PRE_TAG_LEN;
+        //outputLength = bodyLength + FLV_TAG_HEAD_LEN + FLV_PRE_TAG_LEN;
         output = new char[outputLength];
 
         // flv tag header
@@ -370,7 +271,6 @@ static JNINativeMethod g_methods[] = {
         { "nativePause",       "(JZ)I",                    (void*)_pause },
         { "nativeIsConnected", "(J)Z",                     (void*)_isConnected },
         { "nativeClose",       "(J)V",                     (void*)_close },
-        { "nativeWriteHeader", "(JII)I",                   (void*)_writeHeader },
         { "nativeWriteAudio",  "(J[BIIJ)I",                (void*)_writeAudio },
 };
 
@@ -388,8 +288,8 @@ void rtmp_client_OnUnload(JNIEnv* env)
 }
 
 
-// extern "C" JNIEXPORT jint JNICALL
-// Java_dai_android_media_client_rtmp_RtmpClient_nativeWriteHeader(JNIEnv* env,
-//     jobject thiz, jlong handler, jint video_width, jint video_height)
+// extern "C" JNIEXPORT jlong JNICALL
+// Java_dai_android_media_client_rtmp_RtmpClient_nativeInit(JNIEnv* env, jobject thiz)
 // {
+//     return 0L;
 // }

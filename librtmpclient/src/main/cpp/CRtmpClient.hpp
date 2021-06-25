@@ -20,6 +20,8 @@ NS_BEGIN
         jint RTMP_ERROR_URL_SETUP;
         jint RTMP_ERROR_URL_CONNECT;
         jint RTMP_ERROR_URL_CONNECT_STREAM;
+
+        jint RTMP_NOT_CONNECTED;
     };
 
     extern RtmpClientException exceptions;
@@ -43,15 +45,19 @@ NS_BEGIN
     public:
         int openUrl(const char* cUrl, int timeout, bool upload = false);
 
-        int read(uint8_t* data, int size);
+        int readRaw(uint8_t* data, int size);
 
-        int write();
+        int writeRaw(uint8_t* data, int size);
+
+        int writeFLVHeader(int videoWidth, int videoHeight);
 
         int writeVideoH264();
 
-        int writeAudioAcc();
+        int writeAudioFrame();
 
         bool isConnected();
+
+        int pause(bool is);
 
     };
 
