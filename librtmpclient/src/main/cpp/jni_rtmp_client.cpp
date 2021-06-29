@@ -103,7 +103,7 @@ static void initRtmpClientException(JNIEnv* env)
 
 }
 
-static jlong _init(JNIEnv* env, jobject thiz)
+static jlong init_(JNIEnv* env, jobject thiz)
 {
     auto* client = new CRtmpClient;
     if (client == nullptr)
@@ -111,6 +111,9 @@ static jlong _init(JNIEnv* env, jobject thiz)
         throwIllegalStateException(env, "_init: new CRtmpClient failed");
         return exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC;
     }
+
+    char* badCode = new char[14];
+    char* badcode1 = (char*)malloc(15);
 
     LOGI("_init: CRtmpClient=%p", client);
     return (jlong)client;
@@ -136,10 +139,8 @@ static jlong _init(JNIEnv* env, jobject thiz)
         }                                                               \
     } while(0)
 
-static jint
-_open(JNIEnv* env, jobject thiz, jlong handler,
-        jstring url, jboolean publish, jint timeout,
-        jobject config)
+static jint open_(JNIEnv* env, jobject thiz, jlong handler,
+        jstring url, jboolean publish, jint timeout, jobject config)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
@@ -149,7 +150,8 @@ _open(JNIEnv* env, jobject thiz, jlong handler,
     return result;
 }
 
-static jint _read(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, jint size)
+static jint read_(JNIEnv* env, jobject thiz, jlong handler,
+        jbyteArray data, jint offset, jint size)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
@@ -169,8 +171,8 @@ static jint _read(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jin
     return result;
 }
 
-static jint
-_write(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, jint size)
+static jint write_(JNIEnv* env, jobject thiz, jlong handler,
+        jbyteArray data, jint offset, jint size)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
 
@@ -187,26 +189,26 @@ _write(JNIEnv* env, jobject thiz, jlong handler, jbyteArray data, jint offset, j
     return result;
 }
 
-static jint _pause(JNIEnv* env, jobject thiz, jlong handler, jboolean pause)
+static jint pause_(JNIEnv* env, jobject thiz, jlong handler, jboolean pause)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, exceptions.RTMP_ERROR_OBJECT_NOT_ALLOC);
     return rtmpClient->pause(pause);
 }
 
-static jboolean _isConnected(JNIEnv* env, jobject thiz, jlong handler)
+static jboolean isConnected_(JNIEnv* env, jobject thiz, jlong handler)
 {
     RTMP_CLIENT_CHECK_RETURN(rtmpClient, handler, JNI_FALSE);
     return rtmpClient->isConnected();
 }
 
-static void _close(JNIEnv* env, jobject thiz, jlong handler)
+static void close_(JNIEnv* env, jobject thiz, jlong handler)
 {
     RTMP_CLIENT_CHECK(rtmpClient, handler);
     delete rtmpClient;
 }
 
 
-static jint _writeAudio(JNIEnv* env, jobject thiz, jlong handler,
+static jint writeAudio_(JNIEnv* env, jobject thiz, jlong handler,
         jbyteArray data, jint offset, jint length, jlong timestamp)
 {
     RTMP* rtmp = (RTMP*)handler;
@@ -263,15 +265,17 @@ static jint _writeAudio(JNIEnv* env, jobject thiz, jlong handler,
     env->ReleaseByteArrayElements(data, cdata, JNI_ABORT);
 }
 
+static const char* JNI_SIGN_OPEN = "(JLjava/lang/String;ZILdai/android/media/client/rtmp/PublishConfig;)I";
+
 static JNINativeMethod g_methods[] = {
-        { "nativeInit",        "()J",                      (void*)_init },
-        { "nativeOpen",        "(JLjava/lang/String;ZI)I", (void*)_open },
-        { "nativeRead",        "(J[BII)I",                 (void*)_read },
-        { "nativeWrite",       "(J[BII)I",                 (void*)_write },
-        { "nativePause",       "(JZ)I",                    (void*)_pause },
-        { "nativeIsConnected", "(J)Z",                     (void*)_isConnected },
-        { "nativeClose",       "(J)V",                     (void*)_close },
-        { "nativeWriteAudio",  "(J[BIIJ)I",                (void*)_writeAudio },
+        { "nativeInit",        "()J",         (void*)init_ },
+        { "nativeOpen",        JNI_SIGN_OPEN, (void*)open_ },
+        { "nativeRead",        "(J[BII)I",    (void*)read_ },
+        { "nativeWrite",       "(J[BII)I",    (void*)write_ },
+        { "nativePause",       "(JZ)I",       (void*)pause_ },
+        { "nativeIsConnected", "(J)Z",        (void*)isConnected_ },
+        { "nativeClose",       "(J)V",        (void*)close_ },
+        { "nativeWriteAudio",  "(J[BIIJ)I",   (void*)writeAudio_ },
 };
 
 void rtmp_client_OnLoad(JNIEnv* env)

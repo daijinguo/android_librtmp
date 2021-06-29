@@ -7,6 +7,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import com.qiu.liang.leak.NativeLeakProf
 import dai.android.media.client.rtmp.PublishConfig
 import dai.android.media.client.rtmp.RtmpClient
 
@@ -15,9 +16,10 @@ class MainActivity : AppCompatActivity() {
     private var mediaConfig: MediaConfig? = null
 
     private var rtmpClient = RtmpClient()
-    private val rtmpClientUrl =
-        "rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_522907740_44689574&key=4005e7f6505f20cf24ea21cefe7b5218&schedule=rtmp&pflag=1"
 
+    // private val rtmpClientUrl =
+    //     "rtmp://live-push.bilivideo.com/live-bvc/?streamname=live_522907740_44689574&key=4005e7f6505f20cf24ea21cefe7b5218&schedule=rtmp&pflag=1"
+    private val rtmpClientUrl = "rtmp://58.200.131.2:1935/livetv/hunantv"
 
     private lateinit var btnStart: Button
     private lateinit var btnFinish: Button
@@ -27,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         when (v.id) {
             R.id.btn_start -> {
                 // rtmpClient.open(rtmpClientUrl, true)
+                Log.i(TAG, NativeLeakProf.dumpLeakInfo())
             }
 
             R.id.btn_finish -> {
@@ -45,8 +48,9 @@ class MainActivity : AppCompatActivity() {
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             Log.i(TAG, "surfaceChanged: fmt=$format width=$width height=$height")
 
-            val config = PublishConfig.Build().video(width, height).builder()
-            rtmpClient.publish(rtmpClientUrl, config)
+            // val config = PublishConfig.Build().video(width, height).builder()
+            // rtmpClient.publish(rtmpClientUrl, config)
+            rtmpClient.open(rtmpClientUrl)
         }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {
