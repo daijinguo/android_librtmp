@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.qiu.liang.leak.NativeLeakProf
+import dai.android.leak.LibraryHook
 import dai.android.media.client.rtmp.RtmpClient
 
 class RtmpActivity : AppCompatActivity() {
@@ -28,8 +29,11 @@ class RtmpActivity : AppCompatActivity() {
         when (v.id) {
             R.id.btn_start -> {
                 // rtmpClient.open(rtmpClientUrl, true)
-                NativeLeakProf.dumpLeakStack()
-                Log.i(TAG, NativeLeakProf.dumpLeakInfo())
+                /// NativeLeakProf.dumpLeakStack()
+                /// Log.i(TAG, NativeLeakProf.dumpLeakInfo())
+
+                LibraryHook.scan();
+
             }
 
             R.id.btn_finish -> {

@@ -1,3 +1,5 @@
-include ':app'
 rootProject.name = "RtmpPublisher"
+
+include ':app'
 include ':librtmpclient'
+include ':libNativeLeak'
