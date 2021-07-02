@@ -24,8 +24,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class LibraryHook {
     private static final String TAG = "LibraryHook";
-    private static final String LIBNAME = "ANativeLeakReporter";
+    private static final String LIBNAME = "NativeLeakReporter";
     private static final String PROC_MAP_FILE = new String("/proc/" + Process.myPid() + "/maps");
+
+    static {
+        System.loadLibrary(LIBNAME);
+    }
 
     private static void closeQuietly(Closeable... closeables) {
         if (null == closeables)
