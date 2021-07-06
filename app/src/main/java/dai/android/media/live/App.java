@@ -3,8 +3,6 @@ package dai.android.media.live;
 import android.app.Application;
 import android.content.Context;
 
-import com.qiu.liang.leak.NativeLeakProf;
-
 import dai.android.leak.LibraryHook;
 
 public class App extends Application {
@@ -20,6 +18,8 @@ public class App extends Application {
     public void onCreate() {
         super.onCreate();
 
-        LibraryHook.start(this);
+        LibraryHook.init(this);
+
+        // LibraryHook.start(this);
     }
 }

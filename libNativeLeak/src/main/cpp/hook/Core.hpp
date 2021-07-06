@@ -2,6 +2,7 @@
 
 #include "namespace.hpp"
 #include "Error.hpp"
+#include "Stack.hpp"
 
 HOOK_NS_START
 

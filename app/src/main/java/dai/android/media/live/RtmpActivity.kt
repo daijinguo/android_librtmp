@@ -32,7 +32,7 @@ class RtmpActivity : AppCompatActivity() {
                 /// NativeLeakProf.dumpLeakStack()
                 /// Log.i(TAG, NativeLeakProf.dumpLeakInfo())
 
-                LibraryHook.scan();
+                // LibraryHook.scan();
 
             }
 
