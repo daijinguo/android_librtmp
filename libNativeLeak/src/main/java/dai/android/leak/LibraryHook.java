@@ -11,6 +11,12 @@ public final class LibraryHook {
     }
 
     public static void init(Application app) {
+        String[] libs = new String[]{
+                "native_hooker",
+                "rtmp_client_jni",
+                "KuLive",
+        };
+        hookELF(libs);
     }
 
     private static native boolean hookELF(String[] files);
